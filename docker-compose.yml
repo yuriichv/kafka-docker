@@ -1,0 +1,79 @@
+---
+version: '3'
+#networks:
+#  default:
+#    external:
+#      name: my_default
+volumes:
+    zoo1-plain-data:
+    zoo1-plain-data-log:
+    kafka1-data:
+    kafka2-data:
+services:
+  kafka1.cmx.ru:
+    image: yuriichv/kafka:2.3.0
+    hostname: kafka1
+    domainname: cmx.ru
+    build: 
+      context: ./docker-build
+      dockerfile: Dockerfile-kafka
+    environment:
+      TZ: "Europe/Moscow"
+      JMX_PORT: "9997"
+      #EXTRA_ARGS: "-Djavax.net.debug=all"
+      #EXTRA_ARGS: "-Djavax.net.debug=ssl:handshake:verbose -Djava.security.debug=certpath -Dcom.sun.security.enableCRLDP=true  -Dcom.sun.net.ssl.checkRevocation=true"
+      #      EXTRA_ARGS: "-Dcom.sun.security.enableCRLDP=true  -Dcom.sun.net.ssl.checkRevocation=true"
+      #!!! можно заменить на ./bin/kafka-server-start.sh --override broker.id=
+      KAFKA_BROKER_ID: 1
+      KAFKA_PORT: 9092
+    depends_on:
+      - zoo1
+    ports:
+      - 9092:9092
+      - 9081:9080
+      - 9997:9997
+    volumes:
+      - "${PROPS:-./data/server.properties}:/opt/kafka/config/server.properties.tpl:z"
+      #- "./data/kafka1-logs:/tmp/kafka-logs:z"
+      - "kafka1-data:/tmp/kafka-logs"
+      - "./data/log4j.properties:/opt/kafka/config/log4j.properties:z"
+
+  kafka2.cmx.ru:
+    image: yuriichv/kafka:2.3.0
+    hostname: kafka2
+    domainname: cmx.ru
+    build: 
+      context: ./docker-build
+      dockerfile: Dockerfile-kafka
+    environment:
+      TZ: "Europe/Moscow"
+      JMX_PORT: "9998"
+      #EXTRA_ARGS: "-Dcom.sun.security.enableCRLDP=true  -Dcom.sun.net.ssl.checkRevocation=true"
+      KAFKA_BROKER_ID: 2
+      KAFKA_PORT: 9093
+    depends_on:
+      - zoo1
+    ports:
+      - 9093:9093
+      - 9082:9080
+      - 9998:9998
+    volumes:
+      - "${PROPS:-./data/server.properties}:/opt/kafka/config/server.properties.tpl:z"
+        #- "./data/kafka2-logs:/tmp/kafka-logs:z"
+      - "kafka2-data:/tmp/kafka-logs"
+      - "./data/log4j.properties:/opt/kafka/config/log4j.properties:z"
+
+  zoo1:
+    image: zookeeper:3.4
+    #    restart: always
+    hostname: zoo1
+    #network_mode: host
+    ports:
+      - 2181:2181
+    environment:
+      TZ: "Europe/Moscow"
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zoo1:2888:3888  
+    volumes:
+      - "zoo1-plain-data:/data"
+      - "zoo1-plain-data-log:/data-log"

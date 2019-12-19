@@ -1,0 +1,35 @@
+ARG version=2.3.0
+FROM alpine:latest as builder
+ARG version
+RUN apk --update add curl bash
+RUN mkdir -p /tmp/kafka && curl http://mirror.linux-ia64.org/apache/kafka/${version}/kafka_2.12-${version}.tgz | tar -xz -C /tmp/kafka -f - 
+
+
+
+FROM openjdk:8-alpine 
+ARG version
+RUN apk --update add bash gettext
+#RUN mkdir /opt/kafka -p && cd /opt/kafka 
+RUN addgroup -S -g 992 kafka && adduser -S -G kafka -u 992 kafka
+USER kafka
+COPY --from=builder --chown=kafka:kafka /tmp/kafka/kafka_2.12-${version} /opt/kafka
+
+#COPY "/opt/kafka/config/server.properties"]
+RUN cp /opt/kafka/config/server.properties /opt/kafka/config/server.properties.tpl && \
+    echo -e "#!/bin/sh \n cat /opt/kafka/config/server.properties.tpl | envsubst > /opt/kafka/config/server.properties && /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties" > /opt/kafka/startup.sh && \
+    chmod a+x /opt/kafka/startup.sh && \
+    chown kafka:kafka /opt/kafka/startup.sh
+
+RUN mkdir /tmp/kafka-logs && chown kafka:kafka /tmp/kafka-logs
+
+ADD --chown=kafka:kafka https://repo.maven.apache.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.11.0/jmx_prometheus_javaagent-0.11.0.jar /opt/prometheus/jmx_prometheus_javaagent-0.11.0.jar
+COPY --chown=kafka:kafka jmx_prometheus_javaagent.yaml /opt/prometheus/jmx_prometheus_javaagent.yaml
+
+
+
+ENV KAFKA_OPTS="$KAFKA_OPTS -javaagent:/opt/prometheus/jmx_prometheus_javaagent-0.11.0.jar=9080:/opt/prometheus/jmx_prometheus_javaagent.yaml"
+
+EXPOSE 9092 9080
+#ENTRYPOINT ["/opt/kafka/bin/kafka-server-start.sh", "/opt/kafka/config/server.properties"]
+#!!! можно заменить на ./bin/kafka-server-start.sh --override broker.id=
+ENTRYPOINT ["/opt/kafka/startup.sh", "/opt/kafka/config/server.properties"]
